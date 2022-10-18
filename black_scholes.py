@@ -12,13 +12,14 @@ from py_vollib.black_scholes import black_scholes as bs
 from py_vollib.black_scholes.greeks.analytical import delta, gamma, vega, theta, rho
 
 # Trying random data
-ticker = "TWTR"
+ticker = "AAPL"
 tickers = [ticker, '^GSPC']
 start = dt.datetime(2016, 12, 1)
 end = dt.datetime(2022, 1, 1)
  
 data = yf.download(tickers=tickers, start=start, end=end, interval="1mo")
 data = data['Adj Close']
+
 
 def blackScholes(r, S, K, T, sigma, type = "c"):
   "Calculating the Black-Scholes price of a call/put"
@@ -40,14 +41,14 @@ def blackScholes(r, S, K, T, sigma, type = "c"):
 # Greeks - Alpha, Beta, Delta, Gamma, Theta, Vega, Rho, Sigma
 
 # Beta = covariance / variance
-log_returns = np.log(data / data.shift())
+def beta_calc():
+  log_returns = np.log(data / data.shift())
+  covariance = log_returns.cov()
+  variance = log_returns['^GSPC'].var()
 
-covariance = log_returns.cov()
-variance = log_returns['^GSPC'].var()
+  beta = covariance.loc[ticker, '^GSPC'] / variance
 
-beta = covariance.loc[ticker, '^GSPC'] / variance
-
-print("Beta: " + str(beta))
+  return beta
 
 # Delta - rate of change of the theoretical option
 def delta_calc(r, S, K, T, sigma, type = "c"):
@@ -123,16 +124,19 @@ def rho_calc(r, S, K, T, sigma, type = "c"):
   except:
     print("Please confirm whether this is a call ('c') or a put ('p') option.")
 
+
+
 r = 0.0391
-S = 30
-K = 40
-T = 240/365
+S = yf.Ticker(ticker).info['regularMarketPrice']
+K = S * 1.05
+T = 14/365
 sigma = 0.30
 option_type = 'p'
+print("Current Price:", str(S), "- Strike Price:", str(K))
 print("Option Price: ", [round(x, 3) for x in blackScholes(r, S, K, T, sigma, option_type)])
 print("       Delta: ", [round(x, 3) for x in delta_calc(r, S, K, T, sigma, option_type)])
 print("       Gamma: ", [round(x, 3) for x in gamma_calc(r, S, K, T, sigma, option_type)])
 print("        Vega: ", [round(x, 3) for x in vega_calc(r, S, K, T, sigma, option_type)])
 print("       Theta: ", [round(x, 3) for x in theta_calc(r, S, K, T, sigma, option_type)])
 print("         Rho: ", [round(x, 3) for x in rho_calc(r, S, K, T, sigma, option_type)])
-
+print("        Beta: ", str(beta_calc()))
