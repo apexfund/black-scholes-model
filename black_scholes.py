@@ -32,7 +32,7 @@ def blackScholes(r, S, K, T, sigma, type = "c"):
       price = S * norm.cdf(d1, 0, 1) - K * np.exp(-r*T)*norm.cdf(d2, 0, 1)
     elif type == "p":
       price = K * np.exp(-r*T)*norm.cdf(-d2, 0, 1) - S*norm.cdf(-d1, 0, 1)
-    return price, bs(type, S, K, T, r, sigma)
+    return price
   except:
     print("Please confirm whether this is a call ('c') or a put ('p') option.")
 
@@ -61,7 +61,7 @@ def delta_calc(r, S, K, T, sigma, type = "c"):
       delta_calc = norm.cdf(d1, 0, 1)
     elif type == "p":
       delta_calc = norm.cdf(-d1, 0, 1)
-    return delta_calc, delta(type, S, K, T, r, sigma)
+    return delta_calc
   except:
     print("Please confirm whether this is a call ('c') or a put ('p') option.")
 
@@ -75,7 +75,7 @@ def gamma_calc(r, S, K, T, sigma, type = "c"):
 
   try:
       gamma_calc = norm.pdf(d1, 0, 1) / (S * sigma * np.sqrt(T))
-      return gamma_calc, gamma(type, S, K, T, r, sigma)
+      return gamma_calc
   except:
     print("Please confirm whether this is a call ('c') or a put ('p') option.")
 
@@ -88,7 +88,7 @@ def vega_calc(r, S, K, T, sigma, type = "c"):
 
   try:
     vega_calc = S * norm.pdf(d1, 0, 1) * np.sqrt(T)
-    return vega_calc * 0.01, vega(type, S, K, T, r, sigma)
+    return vega_calc * 0.01
   except:
     print("Please confirm whether this is a call ('c') or a put ('p') option.")
 
@@ -104,7 +104,7 @@ def theta_calc(r, S, K, T, sigma, type = "c"):
       theta_calc = -S * norm.pdf(d1, 0, 1) * sigma/(2 * np.sqrt(T)) - r * K * np.exp(-r*T)*norm.cdf(d2, 0, 1)
     elif type == "p":
       theta_calc = -S * norm.pdf(d1, 0, 1) * sigma/(2 * np.sqrt(T)) + r * K * np.exp(-r*T)*norm.cdf(-d2, 0, 1)
-    return theta_calc/365, theta(type, S, K, T, r, sigma)
+    return theta_calc/365
   except:
     print("Please confirm whether this is a call ('c') or a put ('p') option.")
 
@@ -120,7 +120,7 @@ def rho_calc(r, S, K, T, sigma, type = "c"):
       rho_calc = K * T * np.exp(-r*T)*norm.cdf(d2, 0, 1)
     elif type == "p":
       rho_calc = -K * T * np.exp(-r*T)*norm.cdf(-d2, 0, 1)
-    return rho_calc * 0.01, rho(type, S, K, T, r, sigma)
+    return rho_calc * 0.01
   except:
     print("Please confirm whether this is a call ('c') or a put ('p') option.")
 
@@ -128,15 +128,49 @@ def rho_calc(r, S, K, T, sigma, type = "c"):
 
 r = 0.0391
 S = yf.Ticker(ticker).info['regularMarketPrice']
-K = S * 1.05
-T = 14/365
+K = 120
+T = 365/365
 sigma = 0.30
-option_type = 'p'
-print("Current Price:", str(S), "- Strike Price:", str(K))
-print("Option Price: ", [round(x, 3) for x in blackScholes(r, S, K, T, sigma, option_type)])
-print("       Delta: ", [round(x, 3) for x in delta_calc(r, S, K, T, sigma, option_type)])
-print("       Gamma: ", [round(x, 3) for x in gamma_calc(r, S, K, T, sigma, option_type)])
-print("        Vega: ", [round(x, 3) for x in vega_calc(r, S, K, T, sigma, option_type)])
-print("       Theta: ", [round(x, 3) for x in theta_calc(r, S, K, T, sigma, option_type)])
-print("         Rho: ", [round(x, 3) for x in rho_calc(r, S, K, T, sigma, option_type)])
-print("        Beta: ", str(beta_calc()))
+option_type = 'c'
+
+option_price = round(blackScholes(r, S, K, T, sigma, option_type), 2)
+delta = round(delta_calc(r, S, K, T, sigma, option_type), 3)
+gamma = round(gamma_calc(r, S, K, T, sigma, option_type), 3)
+vega = round(vega_calc(r, S, K, T, sigma, option_type), 3)
+theta = round(theta_calc(r, S, K, T, sigma, option_type), 3)
+rho = round(rho_calc(r, S, K, T, sigma, option_type), 3)
+beta = round(beta_calc(), 2)
+
+
+print("Current Price:", str(S), "- Strike Price:", round(K, 2))
+print("Option Price: ", option_price)
+print("       Delta: ", delta)
+print("       Gamma: ", gamma)
+print("        Vega: ", vega)
+print("       Theta: ", theta)
+print("         Rho: ", rho)
+print("        Beta: ", beta)
+
+
+# Running Fig Leaf Strat
+
+
+# Check if at least 20% in-the-money
+
+if (option_type == 'c'):
+  itm_exp = (0.8 * S) < K
+elif (option_type == 'p'):
+  itm_exp = (1.2 * S) > K
+
+# Want a relatively volatile stock - high beta
+
+# If the option is 20% in the money 
+if (itm_exp):
+
+# Want the LEAPS call to see price changes similar to the stock - high delta
+  if (delta > 0.8):
+# Check the option price and compare to the Black Scholes model
+
+
+
+
