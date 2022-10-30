@@ -2,6 +2,7 @@
 
 import pandas as pd
 import numpy as np
+import datetime
 import QuantLib
 import yfinance as yf
 import datetime as dt
@@ -12,7 +13,7 @@ from py_vollib.black_scholes import black_scholes as bs
 from py_vollib.black_scholes.greeks.analytical import delta, gamma, vega, theta, rho
 
 # Trying random data
-ticker = "AAPL"
+ticker = "NVDA"
 tickers = [ticker, '^GSPC']
 start = dt.datetime(2016, 12, 1)
 end = dt.datetime(2022, 1, 1)
@@ -20,6 +21,37 @@ end = dt.datetime(2022, 1, 1)
 data = yf.download(tickers=tickers, start=start, end=end, interval="1mo")
 data = data['Adj Close']
 
+# Getting options chain from YFinance
+
+def options_chain(symbol):
+
+  ticker = yf.Ticker(symbol)
+
+  # Options expiration dates
+  exps = ticker.options
+  options = pd.DataFrame()
+
+  for e in exps:
+    opt = ticker.option_chain(e)
+    opt = pd.DataFrame().append(opt.calls).append(opt.puts)
+    opt['expirationDate'] = datetime.datetime.strptime(e, '%Y-%m-%d')
+    options = options.append(opt, ignore_index = True)
+
+    # Need to add 1 day to get correct expiration day due to YFinance error
+    options['expirationDate'] = pd.to_datetime(options['expirationDate']) + datetime.timedelta(days = 1)
+    options['DTE'] = (options['expirationDate'] - datetime.datetime.today()).dt.days / 365
+
+
+    # Making boolean column to denote if option is a call option
+    options['Call'] = options['contractSymbol'].str[4:].apply(lambda x: "C" in x)
+
+    options[['bid', 'ask', 'strike']] = options[['bid', 'ask', 'strike']].apply(pd.to_numeric)
+    options['mark'] = (options['bid'] + options['ask']) / 2
+
+    # Dropping unnecessary data
+    options = options.drop(columns = ['contractSize', 'currency', 'change', 'percentChange', 'lastTradeDate', 'lastPrice'])
+
+  return options
 
 def blackScholes(r, S, K, T, sigma, type = "c"):
   "Calculating the Black-Scholes price of a call/put"
@@ -125,6 +157,14 @@ def rho_calc(r, S, K, T, sigma, type = "c"):
     print("Please confirm whether this is a call ('c') or a put ('p') option.")
 
 
+def getLeapsCallFrame():
+  options = options_chain(ticker)
+  oneYearDate = datetime.date.today() + datetime.timedelta(days = 365)
+  oneYearDate = pd.Timestamp(oneYearDate.year, oneYearDate.month, oneYearDate.day)
+
+  leapsCallOptions = options.loc[options['expirationDate'] >= oneYearDate]
+
+  return leapsCallOptions
 
 r = 0.0391
 S = yf.Ticker(ticker).info['regularMarketPrice']
@@ -152,8 +192,8 @@ print("         Rho: ", rho)
 print("        Beta: ", beta)
 
 
-# Running Fig Leaf Strat
 
+################# Running Fig Leaf Strat ################# 
 
 # Check if at least 20% in-the-money
 
@@ -164,11 +204,15 @@ elif (option_type == 'p'):
 
 # Want a relatively volatile stock - high beta
 
+def purchaseLeapsCall():
+  options = getLeapsCallFrame()
+
+
 # If the option is 20% in the money 
-if (itm_exp):
 
 # Want the LEAPS call to see price changes similar to the stock - high delta
-  if (delta > 0.8):
+if (delta > 0.75):
+  print("")
 # Check the option price and compare to the Black Scholes model
 
 
