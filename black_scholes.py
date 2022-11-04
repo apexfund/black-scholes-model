@@ -13,7 +13,7 @@ from py_vollib.black_scholes import black_scholes as bs
 from py_vollib.black_scholes.greeks.analytical import delta, gamma, vega, theta, rho
 
 # Trying random data
-ticker = "NVDA"
+ticker = "AAPL"
 tickers = [ticker, '^GSPC']
 start = dt.datetime(2016, 12, 1)
 end = dt.datetime(2022, 1, 1)
@@ -40,13 +40,22 @@ def options_chain(symbol):
     # Need to add 1 day to get correct expiration day due to YFinance error
     options['expirationDate'] = pd.to_datetime(options['expirationDate']) + datetime.timedelta(days = 1)
     options['DTE'] = (options['expirationDate'] - datetime.datetime.today()).dt.days / 365
-
-
+    
     # Making boolean column to denote if option is a call option
     options['Call'] = options['contractSymbol'].str[4:].apply(lambda x: "C" in x)
 
     options[['bid', 'ask', 'strike']] = options[['bid', 'ask', 'strike']].apply(pd.to_numeric)
     options['mark'] = (options['bid'] + options['ask']) / 2
+
+    # To calculate the delta
+    K_para = options['strike']
+    if (options['Call'] == "True").any():
+      optionType = 'c'
+    else:
+      optionType = 'p'
+
+    options['Delta'] = delta_calc(r, S, K_para, T, sigma, optionType)
+
 
     # Dropping unnecessary data
     options = options.drop(columns = ['contractSize', 'currency', 'change', 'percentChange', 'lastTradeDate', 'lastPrice'])
@@ -206,13 +215,43 @@ elif (option_type == 'p'):
 
 def purchaseLeapsCall():
   options = getLeapsCallFrame()
+  optionExpDate = ""
+  optionStrike = -1
+  optionBid = -1
+  optionDelta = 0 
 
+  for idx in options.index:
+    if (options['Delta'][idx] > 0.75 and options['strike'][idx] <= (S * 0.8)):
+      optionExpDate = str(options['expirationDate'][idx])[:10]
+      optionStrike = options['strike'][idx]
+      optionBid = options['bid'][idx]
+      optionDelta = options['Delta'][idx]
+      break
 
-# If the option is 20% in the money 
+  return (optionExpDate, round(optionStrike, 2), round(optionBid, 2), round(optionDelta, 2))
 
-# Want the LEAPS call to see price changes similar to the stock - high delta
-if (delta > 0.75):
-  print("")
+data = purchaseLeapsCall()
+leapsDate = data[0]
+leapsStrikePrice = data[1]
+leapsBidPrice = data[2]
+leapsDelta = data[3]
+
+print(leapsDate, leapsStrikePrice, leapsBidPrice, leapsDelta)
+
+# Find intrinsic value/premium - goal is to be high
+intrinsicValue = round(S - leapsStrikePrice, 2)
+if (intrinsicValue < 0):
+  intrinsicValue = 0
+premium = leapsBidPrice - intrinsicValue
+
+print(intrinsicValue, premium)
+
+bsOptionPrice = blackScholes(r, S, leapsStrikePrice, T, sigma, option_type)
+if (leapsBidPrice <= bsOptionPrice):
+  print("Fair price for contract")
+else:
+  print("Not a fair price for contract")
+  print("Black Scholes fair price: " + str(bsOptionPrice))
 # Check the option price and compare to the Black Scholes model
 
 
