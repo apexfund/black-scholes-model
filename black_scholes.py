@@ -13,7 +13,7 @@ from py_vollib.black_scholes import black_scholes as bs
 from py_vollib.black_scholes.greeks.analytical import delta, gamma, vega, theta, rho
 
 # Trying random data
-ticker = "AAPL"
+ticker = "INMD"
 tickers = [ticker, '^GSPC']
 start = dt.datetime(2016, 12, 1)
 end = dt.datetime(2022, 1, 1)
@@ -39,7 +39,8 @@ def options_chain(symbol):
 
     # Need to add 1 day to get correct expiration day due to YFinance error
     options['expirationDate'] = pd.to_datetime(options['expirationDate']) + datetime.timedelta(days = 1)
-    options['DTE'] = (options['expirationDate'] - datetime.datetime.today()).dt.days / 365
+    time = (options['expirationDate'] - datetime.datetime.today()).dt.days / 365
+    options['DTE'] = time
     
     # Making boolean column to denote if option is a call option
     options['Call'] = options['contractSymbol'].str[4:].apply(lambda x: "C" in x)
@@ -54,7 +55,7 @@ def options_chain(symbol):
     else:
       optionType = 'p'
 
-    options['Delta'] = delta_calc(r, S, K_para, T, sigma, optionType)
+    options['Delta'] = delta_calc(r, S, K_para, time, sigma, optionType)
 
 
     # Dropping unnecessary data
@@ -166,15 +167,6 @@ def rho_calc(r, S, K, T, sigma, type = "c"):
     print("Please confirm whether this is a call ('c') or a put ('p') option.")
 
 
-def getLeapsCallFrame():
-  options = options_chain(ticker)
-  oneYearDate = datetime.date.today() + datetime.timedelta(days = 365)
-  oneYearDate = pd.Timestamp(oneYearDate.year, oneYearDate.month, oneYearDate.day)
-
-  leapsCallOptions = options.loc[options['expirationDate'] >= oneYearDate]
-
-  return leapsCallOptions
-
 r = 0.0391
 S = yf.Ticker(ticker).info['regularMarketPrice']
 K = 120
@@ -204,14 +196,16 @@ print("        Beta: ", beta)
 
 ################# Running Fig Leaf Strat ################# 
 
-# Check if at least 20% in-the-money
-
-if (option_type == 'c'):
-  itm_exp = (0.8 * S) < K
-elif (option_type == 'p'):
-  itm_exp = (1.2 * S) > K
-
 # Want a relatively volatile stock - high beta
+
+def getLeapsCallFrame():
+  options = options_chain(ticker)
+  oneYearDate = datetime.date.today() + datetime.timedelta(days = 365)
+  oneYearDate = pd.Timestamp(oneYearDate.year, oneYearDate.month, oneYearDate.day)
+
+  leapsCallOptions = options.loc[options['expirationDate'] >= oneYearDate]
+
+  return leapsCallOptions
 
 def purchaseLeapsCall():
   options = getLeapsCallFrame()
@@ -221,7 +215,7 @@ def purchaseLeapsCall():
   optionDelta = 0 
 
   for idx in options.index:
-    if (options['Delta'][idx] > 0.75 and options['strike'][idx] <= (S * 0.8)):
+    if (options['Delta'][idx] > 0.75 and isLeapsCallItm(S, options['strike'][idx])):
       optionExpDate = str(options['expirationDate'][idx])[:10]
       optionStrike = options['strike'][idx]
       optionBid = options['bid'][idx]
@@ -229,6 +223,12 @@ def purchaseLeapsCall():
       break
 
   return (optionExpDate, round(optionStrike, 2), round(optionBid, 2), round(optionDelta, 2))
+
+def isLeapsCallItm(stockCurrPrice, leapsStrikePrice):
+  if (0.8 * stockCurrPrice > leapsStrikePrice):
+    return True
+  else:
+    return False
 
 data = purchaseLeapsCall()
 leapsDate = data[0]
@@ -246,12 +246,51 @@ premium = leapsBidPrice - intrinsicValue
 
 print(intrinsicValue, premium)
 
+def getShortTermCallFrame():
+  options = options_chain(ticker)
+  oneMonthDate = datetime.date.today() + datetime.timedelta(days = 30)
+  oneMonthDate = pd.Timestamp(oneMonthDate.year, oneMonthDate.month, oneMonthDate.day)
+
+  upperTimeBoundDate = datetime.date.today() + datetime.timedelta(days = 45)
+  upperTimeBoundDate = pd.Timestamp(upperTimeBoundDate.year, upperTimeBoundDate.month, upperTimeBoundDate.day)
+  
+  shortTermCalls = options.loc[options['expirationDate'] >= oneMonthDate and options['expirationDate'] <= upperTimeBoundDate]
+
+  return shortTermCalls
+
+def purchaseShortTermCall(leapsDelta):
+  options = getShortTermCallFrame()
+  optionExpDate = ""
+  optionStrike = -1
+  optionBid = -1
+  optionDelta = 0 
+
+  for idx in options.index:
+    if (options['Delta'][idx] + 0.1 <= leapsDelta and isShortTermCallOtm(S, options['strike'][idx])):
+      optionExpDate = str(options['expirationDate'][idx])[:10]
+      optionStrike = options['strike'][idx]
+      optionBid = options['bid'][idx]
+      optionDelta = options['Delta'][idx]
+      break
+
+  return (optionExpDate, round(optionStrike, 2), round(optionBid, 2), round(optionDelta, 2))
+
+def isShortTermCallOtm(stockCurrPrice, callStrikePrice):
+  if (stockCurrPrice < callStrikePrice):
+    return True
+  else:
+    return False
+
+
 bsOptionPrice = blackScholes(r, S, leapsStrikePrice, T, sigma, option_type)
 if (leapsBidPrice <= bsOptionPrice):
   print("Fair price for contract")
+
+  # Find a call with a Delta of 0.1 lower than LEAPS delta
+  shortTermCallData = purchaseShortTermCall(leapsDelta)
+
 else:
-  print("Not a fair price for contract")
-  print("Black Scholes fair price: " + str(bsOptionPrice))
+  print("Not a fair price for contract. Black Scholes fair price: " + str(bsOptionPrice))
 # Check the option price and compare to the Black Scholes model
 
 
